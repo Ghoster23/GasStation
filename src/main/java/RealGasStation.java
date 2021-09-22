@@ -1,6 +1,8 @@
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.bigpoint.assessment.gasstation.GasPump;
 import net.bigpoint.assessment.gasstation.GasStation;
@@ -9,7 +11,7 @@ import net.bigpoint.assessment.gasstation.exceptions.GasTooExpensiveException;
 import net.bigpoint.assessment.gasstation.exceptions.NotEnoughGasException;
 
 public class RealGasStation implements GasStation {
-	private ArrayList<GasPump> gasPumps;
+	private List<GasPump> gasPumps;
 	
 	private double revenue = 0;
 	private int numSales = 0;
@@ -17,11 +19,12 @@ public class RealGasStation implements GasStation {
 	private int cancelNGas = 0;
 	private int cancelTooMuch = 0;
 	
-	private HashMap<GasType,Double> priceTable;
+	private ConcurrentHashMap<GasType,Double> priceTable;
 	
 	public RealGasStation() {
-		gasPumps = new ArrayList<GasPump>();
-		priceTable = new HashMap<GasType,Double>();
+		gasPumps = Collections.synchronizedList(new ArrayList<GasPump>());
+		
+		priceTable = new ConcurrentHashMap<GasType,Double>();
 	}
 	
 	/**
@@ -33,7 +36,13 @@ public class RealGasStation implements GasStation {
 	 */
 	@Override
 	public void addGasPump(GasPump pump) {
-		gasPumps.add(pump);
+		if(pump == null) return;
+		
+		double remainingAmount = pump.getRemainingAmount();
+		
+		if(remainingAmount <= 0) return;
+		
+		gasPumps.add(new GasPump(pump.getGasType(), remainingAmount));
 	}
 
 	/**
@@ -90,16 +99,17 @@ public class RealGasStation implements GasStation {
 			throw new GasTooExpensiveException();
 		}
 		
-		availablePump.pumpGas(amountInLiters);
+		pumpGas(availablePump, amountInLiters);
 		
 		double cost = amountInLiters * listedPrice;
 		
+		numSales++;
 		revenue += cost;
 		
 		return cost;
 	}
 	
-	private GasPump findPump(GasType type, double amount) {		
+	private synchronized GasPump findPump(GasType type, double amount) {		
 		for(int ind = 0; ind < gasPumps.size(); ind++) {
 			GasPump pump = gasPumps.get(ind);
 			
@@ -110,6 +120,15 @@ public class RealGasStation implements GasStation {
 		return null;
 	}
 
+	private synchronized void pumpGas(GasPump pump, double amount) {
+		gasPumps.remove(pump);
+		
+		pump.pumpGas(amount);
+		
+		gasPumps.add(pump);
+	}
+
+	
 	/**
 	 * @return the total revenue generated
 	 */
@@ -146,6 +165,7 @@ public class RealGasStation implements GasStation {
 		return cancelTooMuch;
 	}
 
+	
 	/**
 	 * Get the price for a specific type of gas
 	 * 
@@ -168,7 +188,7 @@ public class RealGasStation implements GasStation {
 	 */
 	@Override
 	public void setPrice(GasType type, double price) {
-		priceTable.replace(type, price);
+		priceTable.put(type, price);
 	}
 
 }
