@@ -11,7 +11,7 @@ import net.bigpoint.assessment.gasstation.exceptions.NotEnoughGasException;
 public class RealGasStation implements GasStation {
 	private ArrayList<GasPump> gasPumps;
 	
-	private double reveneu = 0;
+	private double revenue = 0;
 	private int numSales = 0;
 	
 	private int cancelNGas = 0;
@@ -45,7 +45,15 @@ public class RealGasStation implements GasStation {
 	 */
 	@Override
 	public Collection<GasPump> getGasPumps() {
-		return gasPumps;
+		ArrayList<GasPump> copy = new ArrayList<GasPump>();
+		
+		for(int ind = 0; ind < gasPumps.size(); ind++) {
+			GasPump pump = gasPumps.get(ind);
+			
+			copy.add(new GasPump(pump.getGasType(), pump.getRemainingAmount()));
+		}
+		
+		return copy;
 	}
 	
 	/**
@@ -67,8 +75,39 @@ public class RealGasStation implements GasStation {
 	@Override
 	public double buyGas(GasType type, double amountInLiters, double maxPricePerLiter)
 			throws NotEnoughGasException, GasTooExpensiveException {
-		// TODO Auto-generated method stub
-		return 0;
+		
+		GasPump availablePump = findPump(type, amountInLiters);
+		
+		if(availablePump == null) {
+			cancelNGas++;
+			throw new NotEnoughGasException();
+		}
+		
+		double listedPrice = priceTable.get(type);
+		
+		if(listedPrice > maxPricePerLiter) {
+			cancelTooMuch++;
+			throw new GasTooExpensiveException();
+		}
+		
+		availablePump.pumpGas(amountInLiters);
+		
+		double cost = amountInLiters * listedPrice;
+		
+		revenue += cost;
+		
+		return cost;
+	}
+	
+	private GasPump findPump(GasType type, double amount) {		
+		for(int ind = 0; ind < gasPumps.size(); ind++) {
+			GasPump pump = gasPumps.get(ind);
+			
+			if(pump.getGasType() == type && pump.getRemainingAmount() >= amount)
+				return pump;
+		}
+		
+		return null;
 	}
 
 	/**
@@ -76,7 +115,7 @@ public class RealGasStation implements GasStation {
 	 */
 	@Override
 	public double getRevenue() {
-		return reveneu;
+		return revenue;
 	}
 
 	/**
